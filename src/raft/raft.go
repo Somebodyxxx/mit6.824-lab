@@ -20,7 +20,6 @@ package raft
 import (
 	//	"bytes"
 
-	"fmt"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -107,9 +106,6 @@ func (rf *Raft) GetState() (int, bool) {
 	defer rf.mu.Unlock()
 	term = rf.currentTerm
 	isleader = (rf.state == Leader)
-	// if isleader {
-	// 	fmt.Printf("获取到serve=%d的Leader状态\n", rf.me)
-	// }
 
 	return term, isleader
 }
@@ -210,7 +206,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	reply.Term = rf.currentTerm
 	if args.Term < rf.currentTerm {
 		reply.VoteGranted = false
-		fmt.Printf("server=%d 拒绝投票给 server=%d,term=%d\n", rf.me, args.CandidateId, args.Term)
+		// fmt.Printf("server=%d 拒绝投票给 server=%d,term=%d\n", rf.me, args.CandidateId, args.Term)
 		return
 	}
 	update := args.LastLogTerm > rf.log[len(rf.log)-1].Term || (args.LastLogIndex >= (len(rf.log)-1) && args.LastLogTerm == rf.log[len(rf.log)-1].Term)
@@ -218,10 +214,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateId
 		rf.resetElectionTime()
-		fmt.Printf("server=%d 投票给 server=%d,term=%d\n", rf.me, args.CandidateId, args.Term)
+		// fmt.Printf("server=%d 投票给 server=%d,term=%d\n", rf.me, args.CandidateId, args.Term)
 	} else {
 		reply.VoteGranted = false
-		fmt.Printf("server=%d 拒绝投票给 server=%d,term=%d\n", rf.me, args.CandidateId, args.Term)
+		// fmt.Printf("server=%d 拒绝投票给 server=%d,term=%d\n", rf.me, args.CandidateId, args.Term)
 	}
 }
 
@@ -314,14 +310,11 @@ func (rf *Raft) ticker() {
 		// time.Sleep().
 		rf.mu.Lock()
 		if time.Now().After(rf.electionTime) {
-			// fmt.Printf("重置前：timeNow= %v,electionTime= %v\n", time.Now(), rf.electionTime)
 			rf.StartElection()
 			rf.resetElectionTime()
-			// fmt.Printf("重置后：timeNow= %v,electionTime= %v\n", time.Now(), rf.electionTime)
 		}
 		rf.mu.Unlock()
-		time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond) //TODO:测试用 后面改小
-
+		time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
 	}
 }
 
@@ -375,7 +368,7 @@ func (rf *Raft) StartElection() {
 	rf.currentTerm++
 	rf.votedFor = rf.me
 
-	fmt.Printf("server=%d,term=%d: 发起选票\n", rf.me, rf.currentTerm)
+	// fmt.Printf("server=%d,term=%d: 发起选票\n", rf.me, rf.currentTerm)
 
 	voteCount := 1
 	args := RequestVoteArgs{rf.currentTerm, rf.me, rf.log[len(rf.log)-1].Index, rf.log[len(rf.log)-1].Term}
@@ -402,7 +395,7 @@ func (rf *Raft) CandidatorSendRequestVote(server int, args *RequestVoteArgs, vot
 	//时效性term检查：
 	if reply.Term < args.Term {
 		//rf.me已经到新的term，并发出广播，接到这条是过期的广播信息
-		fmt.Printf("server=%d,term=%d 收到了过期的消息:serve=%d,term=%d...\n", rf.me, rf.currentTerm, server, reply.Term)
+		// fmt.Printf("server=%d,term=%d 收到了过期的消息:serve=%d,term=%d...\n", rf.me, rf.currentTerm, server, reply.Term)
 		return
 	}
 
@@ -416,10 +409,9 @@ func (rf *Raft) CandidatorSendRequestVote(server int, args *RequestVoteArgs, vot
 		return
 	}
 	*voteCount++
-	// fmt.Printf("server=%d,state=%v, 当前选票数=%d, term=%d\n", rf.me, rf.state, *voteCount, rf.currentTerm)
 	if *voteCount > len(rf.peers)/2 && rf.currentTerm == args.Term && rf.state == Candidator {
 		rf.state = Leader
-		fmt.Printf("server=%d, term=%d: 当选leader \n", rf.me, rf.currentTerm)
+		// fmt.Printf("server=%d, term=%d: 当选leader \n", rf.me, rf.currentTerm)
 		lastLogIndex := rf.log[len(rf.log)-1].Index
 		for i, _ := range rf.peers {
 			rf.nextIndex[i] = lastLogIndex + 1
@@ -505,9 +497,9 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntries, reply *Append
 func (rf *Raft) LeaderSendAppendEntries(serverId int, args *AppendEntries, reply *AppendEntriesReply) {
 	ok := rf.sendAppendEntries(serverId, args, reply)
 	if !ok {
-		// fmt.Printf("Leader sendAppendEntries fail..")
 		return
 	}
+	//call用了 rf.mu 锁 ？？？ 不放在下面会死锁
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	if reply.Term > rf.currentTerm {
